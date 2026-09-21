@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>TIME STOP</title>
+
+    <style>
+        /* Barlow 폰트 및 오리지널 폰트 불러오기 */
+        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@200;300;400;700&display=swap');
+
+        @font-face {
+            font-family: 'CucumberSalad';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2212-2@1.0/CucumberSalad.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'VitroPRIDE';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-10-21@1.0/VitroPride.woff2') format('woff2'),
+                 url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-10-21@1.0/VitroPride.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        /* -----------------------------------
+           로딩 화면 (Intro Screen)
+        ----------------------------------- */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            overflow: visible;
+            perspective: 1000px;
+            transition: background-color 0.4s ease;
+        }
+
+        .loading-screen.split {
+            background-color: transparent;
+        }
+
+        .loading-screen.hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        /* -----------------------------------
+           작은 유리 파편 레이어 및 모션 연출
+        ----------------------------------- */
+        .glass-shards {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10000;
+        }
+
+        .shard {
+            position: absolute;
+            fill: #D73A33;
+            will-change: transform, opacity, fill;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .shard-1  { top: 12%; left: 15%; width: 130px; opacity: 0.95; animation: floatRotate1 5s infinite ease-in-out; }
+        .shard-2  { top: 16%; left: 19%; width: 100px; opacity: 0.45; animation: floatRotate2 4s infinite ease-in-out 0.5s; }
+        .shard-3  { top: 22%; right: 18%; width: 170px; opacity: 0.90; animation: floatRotate3 6s infinite ease-in-out 1s; }
+        .shard-4  { top: 28%; right: 14%; width: 110px; opacity: 0.35; animation: floatRotate1 4.5s infinite ease-in-out 0.2s; }
+        .shard-5  { bottom: 18%; left: 10%; width: 150px; opacity: 0.85; animation: floatRotate2 5.5s infinite ease-in-out 0.8s; }
+        .shard-6  { bottom: 22%; left: 14%; width: 85px;  opacity: 0.50; animation: floatRotate3 3.8s infinite ease-in-out 0.3s; }
+        .shard-7  { bottom: 12%; right: 12%; width: 190px; opacity: 0.95; animation: floatRotate1 6.5s infinite ease-in-out 1.2s; }
+        .shard-8  { bottom: 16%; right: 20%; width: 120px; opacity: 0.40; animation: floatRotate2 4.2s infinite ease-in-out 0.6s; }
+        .shard-9  { top: 45%; left: 6%;  width: 90px;  opacity: 0.75; animation: floatRotate3 5.2s infinite ease-in-out 0.4s; }
+        .shard-10 { top: 8%;  left: 42%; width: 105px; opacity: 0.55; animation: floatRotate1 4.8s infinite ease-in-out 0.9s; }
+        .shard-11 { top: 11%; left: 45%; width: 75px;  opacity: 0.35; animation: floatRotate2 3.5s infinite ease-in-out 0.1s; }
+        .shard-12 { bottom: 32%; right: 6%; width: 105px; opacity: 0.90; animation: floatRotate3 5.8s infinite ease-in-out 1.5s; }
+        .shard-13 { top: 35%; right: 8%; width: 80px;  opacity: 0.40; animation: floatRotate1 4.3s infinite ease-in-out 0.7s; }
+        .shard-14 { bottom: 8%; left: 38%; width: 130px; opacity: 0.85; animation: floatRotate2 6.2s infinite ease-in-out 1.1s; }
+        .shard-15 { bottom: 12%; left: 42%; width: 90px;  opacity: 0.50; animation: floatRotate3 4.6s infinite ease-in-out 0.2s; }
+        .shard-16 { top: 60%; left: 18%; width: 70px;  opacity: 0.95; animation: floatRotate1 3.9s infinite ease-in-out 0.5s; }
+        .shard-17 { top: 25%; left: 3%;  width: 95px;  opacity: 0.45; animation: floatRotate2 5.1s infinite ease-in-out 1.3s; }
+        .shard-18 { bottom: 40%; right: 22%; width: 75px; opacity: 0.70; animation: floatRotate3 4.7s infinite ease-in-out 0.4s; }
+
+        @keyframes floatRotate1 {
+            0% { transform: translate3d(0, 0, 0) rotate(15deg); }
+            50% { transform: translate3d(8px, -12px, 0) rotate(23deg); }
+            100% { transform: translate3d(0, 0, 0) rotate(15deg); }
+        }
+
+        @keyframes floatRotate2 {
+            0% { transform: translate3d(0, 0, 0) rotate(-30deg); }
+            50% { transform: translate3d(-10px, 10px, 0) rotate(-20deg); }
+            100% { transform: translate3d(0, 0, 0) rotate(-30deg); }
+        }
+
+        @keyframes floatRotate3 {
+            0% { transform: translate3d(0, 0, 0) rotate(40deg); }
+            50% { transform: translate3d(12px, 8px, 0) rotate(48deg); }
+            100% { transform: translate3d(0, 0, 0) rotate(40deg); }
+        }
+
+        /* 로딩 분할 시 파편 색상 원상복구 (#00d2ff) */
+        .loading-screen.split .shard {
+            fill: #00d2ff !important;
+            filter: none !important;
+            animation-delay: 0s !important;
+            animation-duration: 1.2s !important;
+            animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1) !important;
+            animation-fill-mode: forwards !important;
+        }
+
+        .loading-screen.split .shard-1  { animation: explode1 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-2  { animation: explode2 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-3  { animation: explode3 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-4  { animation: explode4 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-5  { animation: explode5 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-6  { animation: explode6 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-7  { animation: explode7 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-8  { animation: explode8 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-9  { animation: explode9 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-10 { animation: explode10 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-11 { animation: explode11 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-12 { animation: explode12 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-13 { animation: explode13 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-14 { animation: explode14 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-15 { animation: explode15 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-16 { animation: explode16 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-17 { animation: explode17 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+        .loading-screen.split .shard-18 { animation: explode18 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards !important; }
+
+        @keyframes explode1  { to { transform: translate3d(120vw, -20vh, 0) rotate(180deg); opacity: 0; } }
+        @keyframes explode2  { to { transform: translate3d(110vw, -30vh, 0) rotate(-180deg); opacity: 0; } }
+        @keyframes explode3  { to { transform: translate3d(125vw, -10vh, 0) rotate(220deg); opacity: 0; } }
+        @keyframes explode4  { to { transform: translate3d(105vw, 15vh, 0) rotate(-150deg); opacity: 0; } }
+        @keyframes explode5  { to { transform: translate3d(130vw, 30vh, 0) rotate(200deg); opacity: 0; } }
+        @keyframes explode6  { to { transform: translate3d(115vw, 45vh, 0) rotate(-220deg); opacity: 0; } }
+        @keyframes explode7  { to { transform: translate3d(120vw, -25vh, 0) rotate(190deg); opacity: 0; } }
+        @keyframes explode8  { to { transform: translate3d(105vw, 10vh, 0) rotate(-160deg); opacity: 0; } }
+        @keyframes explode9  { to { transform: translate3d(125vw, 20vh, 0) rotate(210deg); opacity: 0; } }
+        @keyframes explode10 { to { transform: translate3d(110vw, -40vh, 0) rotate(-140deg); opacity: 0; } }
+        @keyframes explode11 { to { transform: translate3d(115vw, -15vh, 0) rotate(170deg); opacity: 0; } }
+        @keyframes explode12 { to { transform: translate3d(130vw, 40vh, 0) rotate(-200deg); opacity: 0; } }
+        @keyframes explode13 { to { transform: translate3d(110vw, -20vh, 0) rotate(180deg); opacity: 0; } }
+        @keyframes explode14 { to { transform: translate3d(120vw, 15vh, 0) rotate(-230deg); opacity: 0; } }
+        @keyframes explode15 { to { transform: translate3d(115vw, 25vh, 0) rotate(200deg); opacity: 0; } }
+        @keyframes explode16 { to { transform: translate3d(105vw, 40vh, 0) rotate(-170deg); opacity: 0; } }
+        @keyframes explode17 { to { transform: translate3d(125vw, -25vh, 0) rotate(190deg); opacity: 0; } }
+        @keyframes explode18 { to { transform: translate3d(110vw, 0vh, 0) rotate(-150deg); opacity: 0; } }
+
+        /* ----------------------------------------------------
+           대형 세모 유리 조각 (원상복구)
+        ---------------------------------------------------- */
+        .large-triangle-shard {
+            position: absolute;
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.95) 0%, rgba(0, 114, 255, 0.85) 100%);
+            mix-blend-mode: overlay;
+            opacity: 0.6;
+            z-index: 10001;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .triangle-1 {
+            top: -10vh;
+            left: -70vw;
+            width: 60vw;
+            height: 110vh;
+            clip-path: polygon(20% 0%, 100% 70%, 0% 100%);
+        }
+
+        .triangle-2 {
+            top: 25vh;
+            left: -35vw;
+            width: 18vw;
+            height: 45vh;
+            clip-path: polygon(80% 0%, 100% 100%, 0% 40%);
+        }
+
+        .loading-screen.split .triangle-1 {
+            animation: triangleFly1 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) 0.1s forwards !important;
+        }
+
+        .loading-screen.split .triangle-2 {
+            animation: triangleFly2 1.5s cubic-bezier(0.2, 0.6, 0.3, 1) 0.45s forwards !important;
+        }
+
+        @keyframes triangleFly1 {
+            0% { transform: translate3d(0, 0, 0) rotate(-15deg); }
+            100% { transform: translate3d(200vw, -10vh, 0) rotate(25deg); }
+        }
+
+        @keyframes triangleFly2 {
+            0% { transform: translate3d(0, 0, 0) rotate(35deg); }
+            100% { transform: translate3d(180vw, 10vh, 0) rotate(-45deg); }
+        }
+
+        /* -----------------------------------
+           텍스트 쪼개기용 레이어
+        ----------------------------------- */
+        .split-text-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .split-text-top,
+        .split-text-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.8s cubic-bezier(0.2, 0.6, 0.3, 1), opacity 0.6s ease;
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .split-text-top {
+            clip-path: polygon(0 0, 100% 0, 100% 52%, 0 42%);
+        }
+
+        .split-text-bottom {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(0 42%, 100% 52%, 100% 100%, 0 100%);
+        }
+
+        .loading-title {
+            font-family: 'CucumberSalad', sans-serif;
+            font-size: 5.5rem;
+            font-weight: normal;
+            letter-spacing: 0.4rem;
+            color: #000000;
+            text-transform: uppercase;
+            line-height: 1;
+            min-height: 5.5rem;
+        }
+
+        .loading-subtitle-wrapper {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+            min-height: 1.8rem;
+        }
+
+        .loading-subtitle {
+            font-family: 'CucumberSalad', sans-serif;
+            font-size: 1.3rem;
+            font-weight: normal;
+            letter-spacing: 0.15rem;
+            color: #000000;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 3px;
+            height: 1.3rem;
+            background-color: #000000;
+            margin-left: 5px;
+            animation: blink 0.6s infinite alternate;
+        }
+
+        .cursor.hide {
+            display: none;
+        }
+
+        @keyframes blink {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .loading-screen.split .split-text-top {
+            transform: translate3d(300px, -70px, 0) rotate(10deg);
+            opacity: 0;
+        }
+
+        .loading-screen.split .split-text-bottom {
+            transform: translate3d(420px, 70px, 0) rotate(-8deg);
+            opacity: 0;
+        }
+
+        /* -----------------------------------
+           메인 화면
+        ----------------------------------- */
+        .main {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .character-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            transform: translate3d(-100vw, 0, 0);
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .character-wrapper.start-animation {
+            animation: characterEnter 1.4s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
+        }
+
+        /* 캐릭터 기본 배경 비디오 (z-index: 1) */
+        .character-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 잔해 애니메이션 비디오 (z-index: 2) */
+        .debris-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            z-index: 2;
+            mix-blend-mode: screen;
+        }
+
+        /* -----------------------------------
+           메인 화면 오버레이 레이어 (z-index: 3)
+           - 채도를 톤다운하면서도 화사함을 유지하도록 선명한 로열 블루(#0055ff) 적용
+           - transition: opacity 0.2s 로 빠른 페이드 전환 유지
+        ----------------------------------- */
+        .p3r-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0055ff;
+            mix-blend-mode: color;
+            z-index: 3;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .p3r-overlay.active {
+            opacity: 0.85;
+        }
+
+        /* -----------------------------------
+           상단 메뉴바 (z-index: 10) 및 경계선
+        ----------------------------------- */
+        .navbar {
+            position: absolute;
+            top: 45px;
+            left: 60px;
+            z-index: 10;
+            pointer-events: auto;
+        }
+
+        .nav-list {
+            display: flex;
+            align-items: center;
+            list-style: none;
+        }
+
+        .nav-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        /* 메뉴간 세로 경계 구분선 */
+        .nav-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: 1.2rem;
+            background-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 클릭 및 반응 영역을 선 영역 전체로 확대 */
+        .nav-item a {
+            font-family: 'Barlow', sans-serif;
+            font-weight: 200;
+            font-size: 1.65rem;
+            color: #ffffff;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 0.3rem;
+            opacity: 0.9;
+            transition: all 0.2s ease;
+            display: block;
+            padding: 12px 30px; /* 클릭 감지 영역 확대 */
+        }
+
+        .nav-item:first-child a {
+            padding-left: 10px; /* 맨 왼쪽은 시각적 균형 정렬 */
+        }
+
+        .nav-item a:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+            text-shadow: 0 0 15px rgba(0, 85, 255, 0.8);
+            color: #e0eeff;
+        }
+
+        /* -----------------------------------
+           게임 타이틀 영역 (z-index: 10)
+        ----------------------------------- */
+        .game-title-container {
+            position: absolute;
+            top: 50%;
+            left: 100px;
+            transform: translateY(-50%);
+            z-index: 10;
+            color: #ffffff;
+            opacity: 0;
+            transition: opacity 1.2s ease, transform 1.2s ease;
+            pointer-events: auto;
+        }
+
+        .character-wrapper.start-animation .game-title-container {
+            opacity: 1;
+            transform: translateY(-50%);
+            transition-delay: 1.2s;
+        }
+
+        .game-title-en {
+            font-family: 'Barlow', sans-serif;
+            font-weight: 200;
+            font-size: 4.8rem;
+            letter-spacing: 0.5rem;
+            text-transform: uppercase;
+            line-height: 1;
+            margin-bottom: 12px;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .game-title-kr {
+            font-family: 'VitroPRIDE', sans-serif;
+            font-size: 1.4rem;
+            letter-spacing: 0.25rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-left: 6px;
+        }
+
+        @keyframes characterEnter {
+            from {
+                transform: translate3d(-100vw, 0, 0);
+            }
+            to {
+                transform: translate3d(0, 0, 0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 1. 로딩 화면 영역 -->
+    <div class="loading-screen" id="loadingScreen">
+        
+        <div class="large-triangle-shard triangle-1"></div>
+        <div class="large-triangle-shard triangle-2"></div>
+
+        <div class="glass-shards" id="glassShards">
+            <svg class="shard shard-1"  viewBox="0 0 100 100"><polygon points="0,0 100,20 40,100"/></svg>
+            <svg class="shard shard-2"  viewBox="0 0 100 100"><polygon points="20,0 100,80 0,100"/></svg>
+            <svg class="shard shard-3"  viewBox="0 0 100 100"><polygon points="0,30 80,0 100,100"/></svg>
+            <svg class="shard shard-4"  viewBox="0 0 100 100"><polygon points="10,0 100,50 30,100"/></svg>
+            <svg class="shard shard-5"  viewBox="0 0 100 100"><polygon points="0,0 90,40 10,100"/></svg>
+            <svg class="shard shard-6"  viewBox="0 0 100 100"><polygon points="30,0 100,100 0,70"/></svg>
+            <svg class="shard shard-7"  viewBox="0 0 100 100"><polygon points="0,10 100,0 50,100"/></svg>
+            <svg class="shard shard-8"  viewBox="0 0 100 100"><polygon points="10,0 90,100 0,60"/></svg>
+            <svg class="shard shard-9"  viewBox="0 0 100 100"><polygon points="0,0 100,40 20,100"/></svg>
+            <svg class="shard shard-10" viewBox="0 0 100 100"><polygon points="40,0 100,70 0,100"/></svg>
+            <svg class="shard shard-11" viewBox="0 0 100 100"><polygon points="0,20 70,0 100,90"/></svg>
+            <svg class="shard shard-12" viewBox="0 0 100 100"><polygon points="10,0 100,60 20,90"/></svg>
+            <svg class="shard shard-13" viewBox="0 0 100 100"><polygon points="0,0 80,30 30,100"/></svg>
+            <svg class="shard shard-14" viewBox="0 0 100 100"><polygon points="20,0 100,90 0,80"/></svg>
+            <svg class="shard shard-15" viewBox="0 0 100 100"><polygon points="0,10 90,0 60,100"/></svg>
+            <svg class="shard shard-16" viewBox="0 0 100 100"><polygon points="0,0 100,30 10,90"/></svg>
+            <svg class="shard shard-17" viewBox="0 0 100 100"><polygon points="30,0 90,100 0,50"/></svg>
+            <svg class="shard shard-18" viewBox="0 0 100 100"><polygon points="10,0 100,40 0,100"/></svg>
+        </div>
+
+        <div class="split-text-wrapper">
+            <div class="split-text-top">
+                <h1 class="loading-title title-text"></h1>
+                <div class="loading-subtitle-wrapper">
+                    <p class="loading-subtitle subtitle-text"></p>
+                    <span class="cursor cursor-top"></span>
+                </div>
+            </div>
+
+            <div class="split-text-bottom">
+                <h1 class="loading-title title-text"></h1>
+                <div class="loading-subtitle-wrapper">
+                    <p class="loading-subtitle subtitle-text"></p>
+                    <span class="cursor cursor-bottom"></span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 2. 메인 화면 영역 -->
+    <main class="main">
+
+        <div class="character-wrapper" id="characterWrapper">
+
+            <!-- 메뉴바 (z-index: 10) -->
+            <nav class="navbar">
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#game">GAME</a></li>
+                    <li class="nav-item"><a href="#world">WORLD</a></li>
+                    <li class="nav-item"><a href="#design">DESIGN</a></li>
+                </ul>
+            </nav>
+
+            <!-- 게임 타이틀 (z-index: 10) -->
+            <div class="game-title-container">
+                <h1 class="game-title-en">Chronostasis</h1>
+                <p class="game-title-kr">크로노스타시스</p>
+            </div>
+
+            <!-- 캐릭터 메인 비디오 (z-index: 1) -->
+            <video
+                class="character-video"
+                id="characterVideo"
+                autoplay
+                muted
+                playsinline
+                loop
+            >
+                <source src="character.webm" type="video/webm">
+            </video>
+
+            <!-- 잔해 무한재생 비디오 (z-index: 2) -->
+            <video
+                class="debris-video"
+                id="debrisVideo"
+                autoplay
+                muted
+                playsinline
+                loop
+            >
+                <source src="debris.webm" type="video/webm">
+            </video>
+
+            <!-- 파란색 전용 오버레이 필터 레이어 (z-index: 3) -->
+            <div class="p3r-overlay" id="p3rOverlay"></div>
+
+        </div>
+
+    </main>
+
+    <script>
+        const loadingScreen = document.getElementById('loadingScreen');
+        const characterWrapper = document.getElementById('characterWrapper');
+        const characterVideo = document.getElementById('characterVideo');
+        const debrisVideo = document.getElementById('debrisVideo');
+        const p3rOverlay = document.getElementById('p3rOverlay');
+        const navLinks = document.querySelectorAll('.nav-item a');
+        
+        const titleElements = document.querySelectorAll('.title-text');
+        const subtitleElements = document.querySelectorAll('.subtitle-text');
+        const cursors = document.querySelectorAll('.cursor');
+
+        const titleFullText = "TIME";
+        const subtitleFullText = "Time won't wait for you.";
+
+        let titleIndex = 0;
+        let subtitleIndex = 0;
+
+        function typeTitle() {
+            if (titleIndex < titleFullText.length) {
+                const char = titleFullText.charAt(titleIndex);
+                titleElements.forEach(el => el.textContent += char);
+                titleIndex++;
+                setTimeout(typeTitle, 120);
+            } else {
+                setTimeout(typeSubtitle, 200);
+            }
+        }
+
+        function typeSubtitle() {
+            if (subtitleIndex < subtitleFullText.length) {
+                const char = subtitleFullText.charAt(subtitleIndex);
+                subtitleElements.forEach(el => el.textContent += char);
+                subtitleIndex++;
+                setTimeout(typeSubtitle, 40);
+            } else {
+                setTimeout(startSplitAnimation, 600);
+            }
+        }
+
+        function startSplitAnimation() {
+            cursors.forEach(c => c.classList.add('hide'));
+
+            loadingScreen.classList.add('split');
+            characterWrapper.classList.add('start-animation');
+
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+            }, 2200);
+        }
+
+        /* -----------------------------------
+           메뉴 호버 이벤트 (빠른 페이드 전환)
+        ----------------------------------- */
+        navLinks.forEach(link => {
+            link.addEventListener('mouseenter', () => {
+                p3rOverlay.classList.add('active');
+                debrisVideo.pause();
+            });
+
+            link.addEventListener('mouseleave', () => {
+                p3rOverlay.classList.remove('active');
+                debrisVideo.play().catch(err => {});
+            });
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(typeTitle, 300);
+        });
+
+        characterWrapper.addEventListener('animationend', () => {
+            characterWrapper.style.willChange = 'auto';
+        });
+    </script>
+
+</body>
+</html>
