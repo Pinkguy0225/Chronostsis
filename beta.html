@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BETA | Chronostasis</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #fff; font-family: 'Barlow', sans-serif; }
+        canvas { display: block; }
+
+        /* 시간 상태에 따라 화면 전체가 물드는 색 막 (멈춤 = 파랑, 흐름 = 빨강) */
+        .tint { position: fixed; inset: 0; pointer-events: none; z-index: 2; mix-blend-mode: color; opacity: .0; }
+        .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+
+        /* 위쪽 정보 */
+        .hud { position: fixed; z-index: 5; top: 22px; left: 26px; user-select: none; }
+        .state { font: 900 clamp(26px, 2.6vw, 44px)/1 'Barlow', sans-serif; letter-spacing: .14em; text-shadow: 0 2px 12px rgba(0,0,0,.4); transition: color .3s; }
+        .state small { display: block; margin-top: 6px; font: 700 13px 'Barlow', sans-serif; letter-spacing: .3em; opacity: .85; }
+        .clock { margin-top: 14px; font: 700 15px 'Barlow', sans-serif; letter-spacing: .2em; opacity: .9; }
+        .back {
+            position: fixed; z-index: 6; top: 20px; right: 24px; padding: 10px 16px;
+            font: 700 13px 'Barlow', sans-serif; letter-spacing: .3em; color: #fff; text-decoration: none;
+            background: #202020; box-shadow: 4px 4px 0 #8f1f1b;
+        }
+        .back:hover { background: #5877b8; }
+        .keys {
+            position: fixed; z-index: 5; left: 26px; bottom: 22px; user-select: none;
+            font: 700 12px 'Barlow', sans-serif; letter-spacing: .2em; line-height: 2; opacity: .85; text-shadow: 0 1px 6px rgba(0,0,0,.5);
+        }
+        .keys b { display: inline-block; min-width: 26px; padding: 0 6px; margin-right: 6px; text-align: center; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.4); }
+
+        /* 시작 화면(클릭하면 마우스로 시점 조작) */
+        .start {
+            position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; text-align: center;
+            background: rgba(10,10,14,.55); cursor: pointer;
+        }
+        .start h1 { font: 900 clamp(34px, 5vw, 76px)/1 'Barlow', sans-serif; letter-spacing: .2em; }
+        .start p { margin-top: 14px; font-size: 15px; letter-spacing: .25em; opacity: .85; }
+        .start .go { display: inline-block; margin-top: 30px; padding: 14px 34px; background: #D73A33; font: 900 18px 'Barlow', sans-serif; letter-spacing: .3em; box-shadow: 6px 6px 0 #8f1f1b; }
+        .start.hidden { display: none; }
+        .loading { position: fixed; z-index: 11; inset: 0; display: grid; place-items: center; background: #111; font: 700 16px 'Barlow', sans-serif; letter-spacing: .4em; }
+        .loading.hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="tint" id="tint"></div>
+    <div class="vignette" id="vignette"></div>
+
+    <div class="hud">
+        <div class="state" id="state">TIME FLOWS<small>멈춰 있는 동안 시간이 흐른다</small></div>
+        <div class="clock" id="clock">WORLD TIME 00:00.00</div>
+    </div>
+    <a class="back" href="index.html#beta">&#8592;&nbsp; MAIN</a>
+    <div class="keys">
+        <div><b>W</b><b>A</b><b>S</b><b>D</b> 이동</div>
+        <div><b>SHIFT</b> 달리기</div>
+        <div><b>MOUSE</b> 시점 회전 &nbsp; <b>WHEEL</b> 거리</div>
+        <div><b>ESC</b> 마우스 풀기</div>
+    </div>
+
+    <div class="start hidden" id="start">
+        <div>
+            <h1>CHRONOSTASIS</h1>
+            <p>움직이면 시간이 멈추고, 멈추면 시간이 흐른다</p>
+            <span class="go">CLICK TO PLAY</span>
+        </div>
+    </div>
+    <div class="loading" id="loading">LOADING...</div>
+
+    <!-- three.js(그래픽 엔진)와 캐릭터 모델. 둘 다 같은 폴더의 파일이라 인터넷 없이, 파일을 더블클릭해 열어도 동작한다 -->
+    <script src="assets/js/three_bundle.js"></script>
+    <script src="assets/js/heroine_glb.js"></script>
+    <script>
+    (() => {
+        const T = window.THREE;
+
+        /* ===== 조절값 ===== */
+        const WALK_SPEED = 2.2, RUN_SPEED = 5.2;        // 걷기·달리기 속도(m/s)
+        const PLAYER_HEIGHT = 1.7;                      // 캐릭터 키(m)
+        const FREEZE_TIME = .35;                        // 시간이 멈추거나 다시 흐르기까지 걸리는 시간(초)
+        const BLUE = new T.Color('#2f6fd6'), RED = new T.Color('#D73A33');
+
+        /* ===== 기본 장면 ===== */
+        const renderer = new T.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = T.PCFSoftShadowMap;
+        renderer.outputColorSpace = T.SRGBColorSpace;
+        renderer.toneMapping = T.ACESFilmicToneMapping;
+        document.body.prepend(renderer.domElement);
+
+        const scene = new T.Scene();
+        scene.background = new T.Color('#c9d3e6');
+        scene.fog = new T.Fog(scene.background.clone(), 25, 90);
+        const camera = new T.PerspectiveCamera(55, innerWidth / innerHeight, .1, 300);
+
+        const hemi = new T.HemisphereLight('#ffffff', '#555566', 1.1);
+        scene.add(hemi);
+        const sun = new T.DirectionalLight('#ffffff', 2.2);
+        sun.position.set(8, 14, 6);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 });
+        scene.add(sun, sun.target);
+        const fill = new T.DirectionalLight('#ffffff', .9); fill.position.set(-4, 6, 10); scene.add(fill);   // 캐릭터 앞쪽이 너무 어둡지 않게
+
+        /* ===== 체크무늬 바닥 ===== */
+        const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+        const g = cv.getContext('2d');
+        for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
+            g.fillStyle = (x + y) % 2 ? '#2a2a30' : '#efeee8'; g.fillRect(x * 128, y * 128, 128, 128);
+        }
+        const tex = new T.CanvasTexture(cv);
+        tex.colorSpace = T.SRGBColorSpace;
+        tex.wrapS = tex.wrapT = T.RepeatWrapping;
+        tex.repeat.set(100, 100);                      // 칸 하나 = 2m
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        const floor = new T.Mesh(new T.PlaneGeometry(400, 400), new T.MeshStandardMaterial({ map: tex, roughness: .9 }));
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        /* ===== 시간에 따라 움직이는 주변 물체들 (시간이 멈추면 함께 멈춘다) ===== */
+        const world = [];                               // 각 물체의 update(worldTime, worldDt)
+        const mat = c => new T.MeshStandardMaterial({ color: c, roughness: .5, metalness: .1 });
+        const shadowed = m => { m.castShadow = true; m.receiveShadow = true; return m; };
+
+        // 둥둥 떠서 도는 큐브들
+        for (let i = 0; i < 14; i++) {
+            const a = i / 14 * Math.PI * 2, r = 9 + (i % 3) * 5;
+            const m = shadowed(new T.Mesh(new T.BoxGeometry(1, 1, 1), mat(i % 2 ? '#D73A33' : '#5877b8')));
+            const base = new T.Vector3(Math.cos(a) * r, 1.6 + (i % 4) * .6, Math.sin(a) * r);
+            m.position.copy(base); scene.add(m);
+            world.push(t => { m.position.y = base.y + Math.sin(t * 1.4 + i) * .6; m.rotation.set(t * .8 + i, t * 1.2 + i, 0); });
+        }
+        // 튀어 오르는 공들
+        for (let i = 0; i < 8; i++) {
+            const m = shadowed(new T.Mesh(new T.SphereGeometry(.45, 24, 16), mat('#f4f2e9')));
+            const x = -12 + i * 3.4, z = -14 - (i % 2) * 3;
+            scene.add(m);
+            world.push(t => { const p = (t * 1.1 + i * .37) % 1; m.position.set(x, .45 + 4 * p * (1 - p) * 3, z); });
+        }
+        // 시계탑: 기둥 + 큰 시계판 + 실제로 도는 바늘 (시간이 멈추면 바늘도 멈춘다)
+        const tower = new T.Group(); tower.position.set(0, 0, -26); scene.add(tower);
+        tower.add(shadowed(new T.Mesh(new T.BoxGeometry(3, 14, 3), mat('#3a3a42'))).translateY(7));
+        const face = new T.Mesh(new T.CircleGeometry(2.2, 48), new T.MeshStandardMaterial({ color: '#f4f2e9', roughness: .6 }));
+        face.position.set(0, 11, 1.52); tower.add(face);
+        const ring = new T.Mesh(new T.TorusGeometry(2.2, .14, 12, 48), mat('#D73A33')); ring.position.copy(face.position); tower.add(ring);
+        const hand = (len, w, c) => { const h = new T.Group(); const b = new T.Mesh(new T.BoxGeometry(w, len, .06), mat(c)); b.position.y = len / 2; h.add(b); h.position.set(0, 11, 1.58); tower.add(h); return h; };
+        const minute = hand(1.8, .12, '#202020'), second = hand(2, .05, '#D73A33');
+        world.push(t => { second.rotation.z = -t * Math.PI * 2 / 6; minute.rotation.z = -t * Math.PI * 2 / 360; });
+        // 진자
+        const pend = new T.Group(); pend.position.set(10, 6, -8); scene.add(pend);
+        const rod = new T.Mesh(new T.CylinderGeometry(.04, .04, 4.5), mat('#202020')); rod.position.y = -2.25; pend.add(rod);
+        const bob = shadowed(new T.Mesh(new T.SphereGeometry(.5, 24, 16), mat('#D73A33'))); bob.position.y = -4.5; pend.add(bob);
+        const beam = shadowed(new T.Mesh(new T.BoxGeometry(.4, .4, 3), mat('#3a3a42'))); beam.position.set(10, 6, -8); scene.add(beam);
+        world.push(t => { pend.rotation.z = Math.sin(t * 2.1) * .7; });
+        // 떨어지는 조각(눈처럼): 시간이 멈추면 허공에 멈춰 선다
+        const N = 900, pos = new Float32Array(N * 3), spd = new Float32Array(N);
+        for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - .5) * 60; pos[i * 3 + 1] = Math.random() * 18; pos[i * 3 + 2] = (Math.random() - .5) * 60; spd[i] = .8 + Math.random() * 1.6; }
+        const pg = new T.BufferGeometry(); pg.setAttribute('position', new T.BufferAttribute(pos, 3));
+        const flakes = new T.Points(pg, new T.PointsMaterial({ color: '#ffffff', size: .09, transparent: true, opacity: .9 }));
+        scene.add(flakes);
+        world.push((t, dt) => {
+            for (let i = 0; i < N; i++) {
+                pos[i * 3 + 1] -= spd[i] * dt;
+                pos[i * 3] += Math.sin(t + i) * .3 * dt;
+                if (pos[i * 3 + 1] < 0) pos[i * 3 + 1] += 18;
+            }
+            pg.attributes.position.needsUpdate = true;
+        });
+        // 기둥들(크기 비교용)
+        for (let i = 0; i < 10; i++) {
+            const a = i / 10 * Math.PI * 2 + .3, r = 24;
+            scene.add(shadowed(new T.Mesh(new T.BoxGeometry(1.2, 6, 1.2), mat('#e7e4da'))).translateX(Math.cos(a) * r).translateZ(Math.sin(a) * r).translateY(3));
+        }
+
+        /* ===== 플레이어 ===== */
+        const player = new T.Group(); player.rotation.y = Math.PI; scene.add(player);
+        let mixer = null, actions = {}, current = null;
+        const play = name => {
+            const next = actions[name];
+            if (!next || next === current) return;
+            next.reset().fadeIn(.2).play();
+            if (current) current.fadeOut(.2);
+            current = next;
+        };
+        const glbBytes = Uint8Array.from(atob(window.HEROINE_GLB), c => c.charCodeAt(0)).buffer;
+        new T.GLTFLoader().parse(glbBytes, '', gltf => {
+            const model = gltf.scene;
+            model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+            // 키를 PLAYER_HEIGHT 로 맞추고 발을 바닥에
+            const box = new T.Box3().setFromObject(model), h = box.max.y - box.min.y || 1;
+            model.scale.setScalar(PLAYER_HEIGHT / h);
+            const box2 = new T.Box3().setFromObject(model);
+            model.position.y -= box2.min.y;
+            player.add(model);
+            mixer = new T.AnimationMixer(model);
+            // 제자리 동작으로 바꾸기: 걷기·달리기 동작에는 엉덩이(Hips)가 실제로 앞으로 나아가는 이동이 들어 있어서
+            // 캐릭터가 앞으로 쭉 갔다가 반복될 때 제자리로 순간이동해 보였다. 앞으로 나아가는 축의 이동만 지운다(위아래 흔들림은 유지).
+            gltf.animations.forEach(clip => {
+                clip.tracks.forEach(tr => {
+                    if (!/Hips\.position$/.test(tr.name)) return;
+                    const v = tr.values, n = v.length / 3;
+                    for (let axis = 0; axis < 3; axis++) {
+                        const drift = Math.abs(v[(n - 1) * 3 + axis] - v[axis]);
+                        let lo = Infinity, hi = -Infinity;
+                        for (let i = 0; i < n; i++) { lo = Math.min(lo, v[i * 3 + axis]); hi = Math.max(hi, v[i * 3 + axis]); }
+                        if (drift > (hi - lo) * .5 && drift > 1e-4) {      // 처음과 끝이 크게 다른 축 = 앞으로 나아가는 축
+                            for (let i = 0; i < n; i++) v[i * 3 + axis] = v[axis];
+                        }
+                    }
+                });
+                actions[clip.name] = mixer.clipAction(clip);
+            });
+            play('Stand');
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('start').classList.remove('hidden');
+        }, err => { document.getElementById('loading').textContent = '모델을 불러오지 못했어요'; console.error(err); });
+
+        /* ===== 입력 ===== */
+        const keys = {};
+        addEventListener('keydown', e => { keys[e.code] = true; });
+        addEventListener('keyup', e => { keys[e.code] = false; });
+        addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+        // 3인칭 시점: 마우스로 캐릭터 주위를 돈다 (원신·젠레스 존 제로 방식)
+        let yaw = 0, pitch = .28, dist = 4.6;          // 처음엔 시계탑 쪽을 바라봄
+        const startEl = document.getElementById('start');
+        startEl.addEventListener('click', () => { renderer.domElement.requestPointerLock && renderer.domElement.requestPointerLock(); startEl.classList.add('hidden'); });
+        renderer.domElement.addEventListener('click', () => { if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock(); });
+        addEventListener('mousemove', e => {
+            const locked = document.pointerLockElement === renderer.domElement;
+            if (!locked && !(e.buttons & 1)) return;     // 잠금이 없을 땐 드래그로도 회전
+            yaw -= e.movementX * .0025;
+            pitch = Math.min(1.2, Math.max(-.25, pitch + e.movementY * .0022));
+        });
+        addEventListener('wheel', e => { dist = Math.min(9, Math.max(2.2, dist + Math.sign(e.deltaY) * .4)); }, { passive: true });
+
+        /* ===== 시간 시스템 ===== */
+        let timeFlow = 1;                                 // 1 = 흐름, 0 = 멈춤 (부드럽게 바뀜)
+        let worldTime = 0;
+        const stateEl = document.getElementById('state'), clockEl = document.getElementById('clock');
+        const tintEl = document.getElementById('tint'), vigEl = document.getElementById('vignette');
+        const BG_FLOW = new T.Color('#e9c9c4'), BG_STOP = new T.Color('#b9cdf0'), bg = new T.Color();
+        let lastMoving = null;
+
+        /* ===== 매 프레임 ===== */
+        const clock = new T.Clock();
+        const fwd = new T.Vector3(), right = new T.Vector3(), move = new T.Vector3();
+        const camTarget = new T.Vector3(), camPos = new T.Vector3();
+        function frame() {
+            const dt = Math.min(clock.getDelta(), .05);
+
+            // 이동 (카메라가 보는 방향 기준)
+            fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));                 // 카메라가 바라보는 방향
+            right.set(fwd.z, 0, -fwd.x).multiplyScalar(-1);
+            move.set(0, 0, 0);
+            if (keys.KeyW) move.add(fwd);
+            if (keys.KeyS) move.sub(fwd);
+            if (keys.KeyD) move.add(right);
+            if (keys.KeyA) move.sub(right);
+            const moving = move.lengthSq() > 0;
+            const running = moving && (keys.ShiftLeft || keys.ShiftRight);
+            if (moving) {
+                move.normalize();
+                player.position.addScaledVector(move, (running ? RUN_SPEED : WALK_SPEED) * dt);
+                // 이동 방향으로 부드럽게 몸 돌리기
+                const target = Math.atan2(move.x, move.z);
+                let d = target - player.rotation.y;
+                d = Math.atan2(Math.sin(d), Math.cos(d));
+                player.rotation.y += d * Math.min(1, dt * 12);
+            }
+            play(moving ? (running ? 'Run' : 'Walk') : 'Stand');
+            if (mixer) mixer.update(dt);                  // 플레이어는 시간 밖: 늘 움직인다
+
+            // 시간: 움직이면 멈추고(파랑), 멈추면 흐른다(빨강)
+            const goal = moving ? 0 : 1;
+            timeFlow += (goal - timeFlow) * Math.min(1, dt / FREEZE_TIME * 3);
+            if (Math.abs(goal - timeFlow) < .002) timeFlow = goal;
+            const wdt = dt * timeFlow;
+            worldTime += wdt;
+            world.forEach(f => f(worldTime, wdt));
+
+            // 색 물들이기
+            const stop = 1 - timeFlow;
+            bg.copy(BG_FLOW).lerp(BG_STOP, stop);
+            scene.background.copy(bg); scene.fog.color.copy(bg);
+            hemi.color.copy(RED).lerp(BLUE, stop).lerp(new T.Color('#ffffff'), .55);
+            const c = stop > .5 ? '#2f6fd6' : '#D73A33';
+            tintEl.style.background = c;
+            tintEl.style.opacity = (.16 + Math.abs(stop - .5) * .12).toFixed(3);
+            vigEl.style.background = `radial-gradient(ellipse at center, transparent 45%, ${stop > .5 ? 'rgba(20,60,160,.55)' : 'rgba(150,20,15,.45)'} 100%)`;
+            if (moving !== lastMoving) {
+                lastMoving = moving;
+                stateEl.innerHTML = moving ? 'TIME STOP<small>움직이는 동안 시간이 멈춘다</small>' : 'TIME FLOWS<small>멈춰 있는 동안 시간이 흐른다</small>';
+                stateEl.style.color = moving ? '#bcd4ff' : '#ffd0cc';
+            }
+            const s = worldTime, mm = Math.floor(s / 60), ss = (s % 60).toFixed(2).padStart(5, '0');
+            clockEl.textContent = `WORLD TIME ${String(mm).padStart(2, '0')}:${ss}`;
+
+            // 카메라: 캐릭터 어깨 뒤에서 따라감
+            camTarget.set(player.position.x, player.position.y + 1.35, player.position.z);
+            camPos.set(
+                camTarget.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+                camTarget.y + Math.sin(pitch) * dist,
+                camTarget.z + Math.cos(yaw) * Math.cos(pitch) * dist
+            );
+            if (camPos.y < .3) camPos.y = .3;
+            camera.position.lerp(camPos, Math.min(1, dt * 14));
+            camera.lookAt(camTarget);
+            sun.position.set(player.position.x + 8, 14, player.position.z + 6);
+            sun.target.position.copy(player.position);
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(frame);
+        }
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        });
+        frame();
+    })();
+    </script>
+</body>
+</html>
